@@ -8,6 +8,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.barinventory.admin.entity.User;
+import com.barinventory.admin.repository.UserRepository;
 import com.barinventory.billing.dtos.BillItemRequest;
 import com.barinventory.billing.dtos.BillResponse;
 import com.barinventory.billing.dtos.BrandBillingDTO;
@@ -21,8 +23,6 @@ import com.barinventory.brands.entity.Brand;
 import com.barinventory.brands.entity.BrandSize;
 import com.barinventory.brands.repository.BrandRepository;
 import com.barinventory.brands.repository.BrandSizeRepository;
-import com.barinventory.entity.User;
-import com.barinventory.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 

@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Setup Product Pricing</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body { background-color: #f4f6fb; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+
+        .section-header {
+            background: #f8f9fa;
+            border-left: 4px solid #764ba2;
+            padding: 8px 14px;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        /* Step indicator */
+        .step {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.85rem;
+        }
+        .step.done    { background: #198754; color: white; }
+        .step.active  { background: #667eea; color: white; }
+        .step.pending { background: #dee2e6; color: #6c757d; }
+        .step-line    { flex: 1; height: 2px; background: #dee2e6; }
+
+        /* Table styling consistent with distribution page */
+        .price-input  { width: 110px; text-align: right; }
+        .cat-badge    { font-size: 0.72rem; }
+        .profit-cell  { background-color: #fff3cd; font-weight: 600; }
+        .has-price    { background-color: #d1e7dd; }
+        .no-price     { background-color: #fff; }
+
+        tfoot td { background: #212529 !important; color: white !important; }
+    </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-dark navbar-expand-lg shadow-sm">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" th:href="@{/dashboard}">
+            <i class="bi bi-shop-window"></i> Liquor Inventory
+        </a>
+        <div class="d-flex align-items-center text-white gap-3">
+            <form th:action="@{/logout}" method="post" class="d-inline">
+                <input type="hidden" th:name="${_csrf.parameterName}"
+                       th:value="${_csrf.token}"/>
+                <button class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </button>
+            </form>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid mt-4 px-4">
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/dashboard}">Dashboard</a></li>
+            <li class="breadcrumb-item">Register Bar</li>
+            <li class="breadcrumb-item active">Product Pricing</li>
+        </ol>
+    </nav>
+
+    <!-- Step Indicator -->
+    <div class="d-flex align-items-center mb-4 gap-2" style="max-width:600px;">
+        <div class="step done"><i class="bi bi-check"></i></div>
+        <div class="step-line"></div>
+        <div class="step done"><i class="bi bi-check"></i></div>
+        <div class="step-line"></div>
+        <div class="step active">3</div>
+        <div class="step-line"></div>
+        <div class="step pending">4</div>
+        <span class="ms-3 text-muted small">Step 3 of 4 — Product Pricing</span>
+    </div>
+
+    <!-- Bar Info Header -->
+    <div class="card mb-3 shadow-sm" style="border-left:4px solid #764ba2; border-radius:10px;">
+        <div class="card-body py-2 d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="mb-0 fw-bold">
+                    <i class="bi bi-shop text-primary"></i>
+                    <span th:text="${bar.barName}">Bar Name</span>
+                </h6>
+                <small class="text-muted"
+                       th:text="${bar.city != null
+                                  ? bar.city + (bar.state != null ? ', ' + bar.state : '')
+                                  : (bar.location != null ? bar.location : '')}">
+                </small>
+            </div>
+            <span class="badge bg-warning text-dark">
+                <i class="bi bi-hourglass-split"></i> Onboarding in Progress
+            </span>
+        </div>
+    </div>
+
+    <div class="alert alert-info mb-3">
+        <i class="bi bi-lightbulb"></i>
+        <strong>How pricing works:</strong>
+        Set the <strong>Selling Price</strong> (what you charge the customer per bottle/unit)
+        and optionally the <strong>Cost Price</strong> (what you paid your supplier).
+        Leave both blank to skip a product — it won't be tracked at this bar.
+        You can update prices any time from bar settings.
+    </div>
+
+    <!-- Error display -->
+    <div id="globalError" class="alert alert-danger" style="display:none;">
+        <i class="bi bi-x-circle"></i>
+        <span id="globalErrorMsg"></span>
+    </div>
+
+    <div class="card shadow">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-3-circle text-primary"></i>
+                Product Selling &amp; Cost Prices
+            </h5>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-muted small">
+                    <span class="badge bg-success me-1">&nbsp;</span> Price set
+                    &nbsp;
+                    <span class="badge bg-light border me-1">&nbsp;</span> Not set
+                </span>
+                <!-- Quick fill button -->
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        onclick="clearAllPrices()">
+                    <i class="bi bi-eraser"></i> Clear All
+                </button>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+
+            <!-- Category filter tabs -->
+            <div class="px-3 pt-3 pb-0">
+                <ul class="nav nav-tabs" id="categoryTabs">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#"
+                           onclick="filterCategory('ALL'); return false;">
+                            All
+                        </a>
+                    </li>
+                    <!-- Dynamically built by JS from product data -->
+                </ul>
+            </div>
+
+            <form id="pricingForm"
+                  th:action="@{/admin/bars/{id}/pricing(id=${bar.barId})}"
+                  method="post">
+
+                <input type="hidden" th:name="${_csrf.parameterName}"
+                       th:value="${_csrf.token}"/>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle mb-0" id="pricingTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="min-width:180px">Product</th>
+                                <th style="min-width:100px">Category</th>
+                                <th style="min-width:80px">Brand</th>
+                                <th style="min-width:70px">Volume</th>
+                                <th style="min-width:70px">Unit</th>
+                                <th class="text-center" style="min-width:130px">
+                                    Selling Price (₹) <span class="text-danger">*</span>
+                                </th>
+                                <th class="text-center" style="min-width:130px">
+                                    Cost Price (₹)
+                                    <small class="text-muted d-block fw-normal"
+                                           style="font-size:0.7rem;">optional</small>
+                                </th>
+                                <th class="text-center profit-cell" style="min-width:100px">
+                                    Margin (₹)
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            <tr th:each="product : ${products}"
+                                th:data-category="${product.category}"
+                                th:classappend="${existingPrices != null
+                                                  and existingPrices[product.productId] != null}
+                                                 ? 'has-price' : 'no-price'">
+
+                                <!-- Product name -->
+                                <td class="fw-semibold"
+                                    th:text="${product.productName}">
+                                </td>
+
+                                <!-- Category -->
+                                <td>
+                                    <span class="badge bg-secondary cat-badge"
+                                          th:text="${product.category}">
+                                    </span>
+                                </td>
+
+                                <!-- Brand -->
+                                <td class="text-muted small"
+                                    th:text="${product.brand}">
+                                </td>
+
+                                <!-- Volume -->
+                                <td class="text-muted small text-center"
+                                    th:text="${product.volumeML != null
+                                               ? product.volumeML + ' ml' : '—'}">
+                                </td>
+
+                                <!-- Unit -->
+                                <td class="text-muted small text-center"
+                                    th:text="${product.unit}">
+                                </td>
+
+                                <!-- Selling Price input -->
+                                <td class="text-center">
+                                    <input type="number"
+                                           step="0.01"
+                                           min="0"
+                                           class="form-control form-control-sm price-input sell-price mx-auto"
+                                           th:name="'sell_' + ${product.productId}"
+                                           th:data-product="${product.productId}"
+                                           th:value="${existingPrices != null
+                                                       and existingPrices[product.productId] != null
+                                                       ? existingPrices[product.productId].sellingPrice
+                                                       : ''}"
+                                           placeholder="0.00"
+                                           onchange="recalcMargin(this)"/>
+                                </td>
+
+                                <!-- Cost Price input -->
+                                <td class="text-center">
+                                    <input type="number"
+                                           step="0.01"
+                                           min="0"
+                                           class="form-control form-control-sm price-input cost-price mx-auto"
+                                           th:name="'cost_' + ${product.productId}"
+                                           th:data-product="${product.productId}"
+                                           th:value="${existingPrices != null
+                                                       and existingPrices[product.productId] != null
+                                                       ? existingPrices[product.productId].costPrice
+                                                       : ''}"
+                                           placeholder="0.00"
+                                           onchange="recalcMargin(this)"/>
+                                </td>
+
+                                <!-- Margin — JS calculated -->
+                                <td class="text-center profit-cell">
+                                    <span class="margin-display"
+                                          th:data-product="${product.productId}">
+                                        —
+                                    </span>
+                                </td>
+
+                            </tr>
+                        </tbody>
+
+                        <!-- Footer summary -->
+                        <tfoot>
+                            <tr>
+                                <td colspan="5" class="text-end fw-bold">
+                                    Products with price set:
+                                </td>
+                                <td class="text-center fw-bold" id="priceSetCount">0</td>
+                                <td class="text-center fw-bold" id="costSetCount">0</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex justify-content-between p-3">
+                    <a th:href="@{/admin/bars/{id}/wells-config(id=${bar.barId})}"
+                       class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Wells
+                    </a>
+                    <div class="d-flex gap-2">
+                        <button type="button"
+                                class="btn btn-outline-primary"
+                                onclick="validateAndSubmit()">
+                            Skip &amp; Setup Opening Stock
+                            <i class="bi bi-skip-forward"></i>
+                        </button>
+                        <button type="button"
+                                class="btn btn-primary px-4"
+                                onclick="validateAndSubmit()">
+                            Save Prices &amp; Continue
+                            <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+</div><!-- /container -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+
+    // ── Build category filter tabs from table data ──────────────────
+    (function buildCategoryTabs() {
+        const categories = new Set();
+        document.querySelectorAll("tbody tr[data-category]").forEach(row => {
+            categories.add(row.dataset.category);
+        });
+
+        const tabList = document.getElementById("categoryTabs");
+        categories.forEach(cat => {
+            const li = document.createElement("li");
+            li.className = "nav-item";
+            li.innerHTML = `<a class="nav-link" href="#"
+                               onclick="filterCategory('${cat}'); return false;">
+                                ${cat}
+                            </a>`;
+            tabList.appendChild(li);
+        });
+    })();
+
+    // ── Filter rows by category ─────────────────────────────────────
+    function filterCategory(category) {
+        // Update active tab
+        document.querySelectorAll("#categoryTabs .nav-link").forEach(link => {
+            link.classList.toggle("active",
+                link.textContent.trim() === category ||
+                (category === "ALL" && link.textContent.trim() === "All"));
+        });
+
+        document.querySelectorAll("tbody tr[data-category]").forEach(row => {
+            row.style.display =
+                (category === "ALL" || row.dataset.category === category)
+                    ? "" : "none";
+        });
+    }
+
+    // ── Recalculate margin for a row ────────────────────────────────
+    function recalcMargin(input) {
+        const productId = input.dataset.product;
+        const row = input.closest("tr");
+
+        const sellInput = row.querySelector(".sell-price");
+        const costInput = row.querySelector(".cost-price");
+        const marginSpan = row.querySelector(".margin-display");
+
+        const sell = parseFloat(sellInput?.value) || 0;
+        const cost = parseFloat(costInput?.value) || 0;
+
+        if (sell > 0 && cost > 0) {
+            const margin = sell - cost;
+            const pct = ((margin / sell) * 100).toFixed(1);
+            marginSpan.textContent = `₹${margin.toFixed(2)} (${pct}%)`;
+            marginSpan.style.color = margin >= 0 ? "#198754" : "#dc3545";
+        } else if (sell > 0) {
+            marginSpan.textContent = "—";
+            marginSpan.style.color = "";
+        } else {
+            marginSpan.textContent = "—";
+            marginSpan.style.color = "";
+        }
+
+        // Update row highlight
+        row.className = row.className.replace(/\bhas-price\b|\bno-price\b/g, "").trim();
+        row.classList.add(sell > 0 ? "has-price" : "no-price");
+
+        updateFooterCounts();
+    }
+
+    // ── Footer: count how many products have prices set ────────────
+    function updateFooterCounts() {
+        let sellCount = 0, costCount = 0;
+        document.querySelectorAll(".sell-price").forEach(i => {
+            if (parseFloat(i.value) > 0) sellCount++;
+        });
+        document.querySelectorAll(".cost-price").forEach(i => {
+            if (parseFloat(i.value) > 0) costCount++;
+        });
+        document.getElementById("priceSetCount").textContent = sellCount;
+        document.getElementById("costSetCount").textContent = costCount;
+    }
+
+    // ── Clear all prices ────────────────────────────────────────────
+    function clearAllPrices() {
+        if (!confirm("Clear all entered prices?")) return;
+        document.querySelectorAll(".sell-price, .cost-price").forEach(i => {
+            i.value = "";
+        });
+        document.querySelectorAll(".margin-display").forEach(s => {
+            s.textContent = "—";
+            s.style.color = "";
+        });
+        document.querySelectorAll("tbody tr").forEach(row => {
+            row.className = row.className.replace(/\bhas-price\b|\bno-price\b/g, "").trim();
+            row.classList.add("no-price");
+        });
+        updateFooterCounts();
+    }
+
+    // ── Validate then submit ────────────────────────────────────────
+    function validateAndSubmit() {
+        const errorDiv = document.getElementById("globalError");
+        const errorMsg = document.getElementById("globalErrorMsg");
+        errorDiv.style.display = "none";
+        const errors = [];
+
+        document.querySelectorAll("tbody tr[data-category]:not([style*='display: none'])").forEach(row => {
+            const sellInput = row.querySelector(".sell-price");
+            const costInput = row.querySelector(".cost-price");
+            const productName = row.querySelector("td")?.textContent?.trim();
+
+            const sell = parseFloat(sellInput?.value) || 0;
+            const cost = parseFloat(costInput?.value) || 0;
+
+            // Only validate if cost is set — must also have selling price
+            if (cost > 0 && sell === 0) {
+                errors.push(`"${productName}": Cost price set but Selling price is missing.`);
+            }
+
+            // Selling price must be >= cost price
+            if (sell > 0 && cost > 0 && sell < cost) {
+                errors.push(`"${productName}": Selling price (₹${sell}) is less than Cost price (₹${cost}).`);
+            }
+        });
+
+        if (errors.length > 0) {
+            errorMsg.innerHTML = "<strong>Fix before proceeding:</strong><br>"
+                + errors.join("<br>");
+            errorDiv.style.display = "block";
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+        }
+
+        document.getElementById("pricingForm").submit();
+    }
+
+    // ── Initial margin calculation on page load ─────────────────────
+    document.querySelectorAll("tbody tr[data-category]").forEach(row => {
+        const sellInput = row.querySelector(".sell-price");
+        if (sellInput) recalcMargin(sellInput);
+    });
+    updateFooterCounts();
+
+</script>
+</body>
+</html>
