@@ -425,13 +425,16 @@ public class InventorySessionService {
     
  // 1. Build productId → quantityFromStockroom map for pre-filling received
  // Returns map of "productId_wellName" → allocated quantity
-    public Map<String, BigDecimal> getDistributionMapForSession(Long sessionId) {
-        List<WellInventory> wells = wellRepository.findBySessionSessionId(sessionId);
+   
+    
+    public Map<Long, BigDecimal> getDistributionMapForSession(Long sessionId) {
+        List<DistributionRecord> distributions =
+                distributionRepository.findBySessionSessionId(sessionId);
 
-        return wells.stream()
+        return distributions.stream()
                 .collect(Collectors.toMap(
-                        w -> w.getProduct().getProductId() + "_" + w.getWellName(),
-                        WellInventory::getReceivedFromDistribution,
+                        d -> d.getProduct().getProductId(),
+                        DistributionRecord::getQuantityFromStockroom,
                         BigDecimal::add
                 ));
     }

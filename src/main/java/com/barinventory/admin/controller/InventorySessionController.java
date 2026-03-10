@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
-//@RestController
+@RestController
 @RequestMapping("/api/sessions")
 @RequiredArgsConstructor
 public class InventorySessionController {
